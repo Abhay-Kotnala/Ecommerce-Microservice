@@ -1,0 +1,118 @@
+spring:
+  application:
+    name: api-gateway
+  
+  # Redis Configuration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  
+  # OAuth2 Resource Server Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8090/realms/ecommerce}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8090/realms/ecommerce/protocol/openid-connect/certs}
+    
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # Order Service Routes
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/orders/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10    # 10 requests per second
+                redis-rate-limiter.burstCapacity: 20    # Max 20 requests in burst
+                redis-rate-limiter.requestedTokens: 1
+            
+        # Inventory Service Routes
+        - id: inventory-service
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/inventory/**
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20    # 20 requests per second
+                redis-rate-limiter.burstCapacity: 40    # Max 40 requests in burst
+                redis-rate-limiter.requestedTokens: 1
+            
+        # Email Service Routes (if integrated later)
+        - id: email-service
+          uri: lb://EMAIL-SERVICE
+          predicates:
+            - Path=/api/email/**
+          filters:
+            - StripPrefix=0
+
+        # Payment Service Routes
+        - id: payment-service
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/api/payment/**
+          filters:
+            - StripPrefix=0
+      
+      # Global CORS configuration removed (handled in SecurityConfig.java)
+
+server:
+  port: 8085
+
+# Eureka Client Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+# Distributed Tracing with Zipkin
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway,ratelimiters
+  endpoint:
+    health:
+      show-details: always
+
+# Resilience4j Configuration
+resilience4j:
+  ratelimiter:
+    instances:
+      orderService:
+        limitForPeriod: 10
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0s
+      inventoryService:
+        limitForPeriod: 20
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0s
+
+logging:
+  level:
+    root: INFO
+    org.springframework: INFO
+    org.springframework.cloud.gateway: INFO
+    reactor.netty.http.client: INFO
+

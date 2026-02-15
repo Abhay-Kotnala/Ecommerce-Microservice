@@ -1,0 +1,8 @@
+frontend/node_modules
+**/target
+**/.idea
+**/.vscode
+**/.git
+**/*.class
+**/*.jar
+!**/app.jar
